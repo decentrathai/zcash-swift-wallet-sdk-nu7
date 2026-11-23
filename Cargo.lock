@@ -2773,7 +2773,7 @@ dependencies = [
  "zcash_client_backend",
  "zcash_client_sqlite",
  "zcash_keys",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.5.0",
  "zcash_pool_migration",
  "zcash_primitives",
  "zcash_proofs",
@@ -3228,7 +3228,7 @@ dependencies = [
  "subtle",
  "tracing",
  "visibility",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.4.2",
  "zcash_spec",
  "zip32",
 ]
@@ -3375,7 +3375,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_with",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.4.2",
  "zcash_primitives",
  "zcash_protocol",
  "zcash_script",
@@ -3952,6 +3952,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
 name = "rand_distr"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4363,7 +4369,7 @@ dependencies = [
  "redjubjub",
  "subtle",
  "tracing",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.4.2",
  "zcash_spec",
  "zip32",
 ]
@@ -7327,7 +7333,7 @@ dependencies = [
  "zcash_address",
  "zcash_encoding",
  "zcash_keys",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.4.2",
  "zcash_primitives",
  "zcash_protocol",
  "zcash_script",
@@ -7439,6 +7445,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zcash_note_encryption"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47faf59a11475e1b148990ed7b272190118f3e437b93fa091ff610cfa250d825"
+dependencies = [
+ "chacha20",
+ "chacha20poly1305",
+ "cipher",
+ "rand_core 0.10.1",
+ "subtle",
+]
+
+[[package]]
 name = "zcash_pool_migration"
 version = "0.1.0-rc.7"
 source = "git+https://github.com/zcash/librustzcash?rev=13ce6c4ef57a6c7e8837d797d85112ae16ac7455#13ce6c4ef57a6c7e8837d797d85112ae16ac7455"
@@ -7483,7 +7502,7 @@ dependencies = [
  "secp256k1",
  "sha2 0.10.9",
  "zcash_encoding",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.4.2",
  "zcash_protocol",
  "zcash_script",
  "zcash_transparent",
