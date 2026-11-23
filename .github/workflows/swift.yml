@@ -51,7 +51,7 @@ jobs:
     # Needed unconditionally: even on an FFI cache hit, the Rust test step below
     # compiles the crate's test profile and so needs the toolchain.
     - name: Setup Rust
-      uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+      uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
       with:
         toolchain: stable
         targets: aarch64-apple-darwin, x86_64-apple-darwin
