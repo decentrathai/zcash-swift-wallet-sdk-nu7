@@ -3,6 +3,17 @@
 version = 4
 
 [[package]]
+name = "addchain"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6197d231bf46c01da9e5cc6df822fbae247d160dc94bfb1b2034800bdd9038a9"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -449,8 +460,8 @@ dependencies = [
  "blake2s_simd",
  "byteorder",
  "crossbeam-channel",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "lazy_static",
  "log",
  "num_cpus",
@@ -596,8 +607,8 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7bc6d6292be3a19e6379786dac800f551e5865a5bb51ebbe3064ab80433f403"
 dependencies = [
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "pairing",
  "rand_core 0.6.4",
  "subtle",
@@ -1528,9 +1539,9 @@ dependencies = [
  "base16ct",
  "crypto-bigint",
  "digest 0.10.7",
- "ff",
+ "ff 0.13.1",
  "generic-array",
- "group",
+ "group 0.13.0",
  "pkcs8",
  "rand_core 0.6.4",
  "sec1",
@@ -1665,6 +1676,33 @@ dependencies = [
  "bitvec",
  "rand_core 0.6.4",
  "subtle",
+]
+
+[[package]]
+name = "ff"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1f686ab92a9fb0eaf188f6c6c87b89490baa6fdb0db4544ba4dc47f7942489f"
+dependencies = [
+ "bitvec",
+ "ff_derive",
+ "rand_core 0.10.1",
+ "subtle",
+]
+
+[[package]]
+name = "ff_derive"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "241afe8c15ffa21933eaefe8a563af36fd9fc98a3e8a044e8f7db52eb1fae3d8"
+dependencies = [
+ "addchain",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2037,9 +2075,20 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff",
+ "ff 0.13.1",
  "memuse",
  "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "group"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fd1a1c7a5206c5b7a3f5a0d7ccd3ff85d0c8f5133d62a02680255b0004af5f4"
+dependencies = [
+ "ff 0.14.0",
+ "rand_core 0.10.1",
  "subtle",
 ]
 
@@ -2081,12 +2130,12 @@ checksum = "fb2a697cad929f706b7987fe804ad57d43622cd37463ba7e4d662a926fdcfea3"
 dependencies = [
  "arrayvec",
  "bitvec",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "halo2_poseidon",
  "halo2_proofs",
  "lazy_static",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rand 0.8.7",
  "sinsemilla",
  "subtle",
@@ -2106,9 +2155,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa3da60b81f02f9b33ebc6252d766f843291fb4d2247a07ae73d20b791fc56f"
 dependencies = [
  "bitvec",
- "ff",
- "group",
- "pasta_curves",
+ "ff 0.13.1",
+ "group 0.13.0",
+ "pasta_curves 0.5.2",
 ]
 
 [[package]]
@@ -2118,12 +2167,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f63a999d9223fa9d3b9db3031fedc316e6039a0ae0f67394408b16ef670c69f"
 dependencies = [
  "blake2b_simd",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "halo2_legacy_pdqsort",
  "indexmap 1.9.3",
  "maybe-rayon",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rand_core 0.6.4",
  "tracing",
 ]
@@ -2436,10 +2485,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0aad3e3ab5a46f4a08d00f5525b86cd0d5204cba64ba68f46e20a590e1808aec"
 dependencies = [
  "anyhow",
- "ff",
+ "ff 0.13.1",
  "halo2_gadgets",
  "hex",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rayon",
 ]
 
@@ -2590,8 +2639,8 @@ checksum = "8499f7a74008aafbecb2a2e608a3e13e4dd3e84df198b604451efe93f2de6e61"
 dependencies = [
  "bitvec",
  "bls12_381",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "rand_core 0.6.4",
  "subtle",
 ]
@@ -2734,7 +2783,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "eip681",
- "ff",
+ "ff 0.13.1",
  "ffi_helpers",
  "fs-mistrust",
  "hex",
@@ -2745,7 +2794,7 @@ dependencies = [
  "nonempty",
  "once_cell",
  "orchard",
- "pasta_curves",
+ "pasta_curves 0.6.3",
  "pczt",
  "prost 0.14.4",
  "rand 0.8.7",
@@ -3207,10 +3256,10 @@ dependencies = [
  "bitvec",
  "blake2b_simd",
  "corez",
- "ff",
+ "ff 0.13.1",
  "fpe",
  "getset",
- "group",
+ "group 0.13.0",
  "halo2_gadgets",
  "halo2_poseidon",
  "halo2_proofs",
@@ -3219,7 +3268,7 @@ dependencies = [
  "lazy_static",
  "memuse",
  "nonempty",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rand 0.8.7",
  "rand_core 0.6.4",
  "reddsa",
@@ -3295,7 +3344,7 @@ version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
- "group",
+ "group 0.13.0",
 ]
 
 [[package]]
@@ -3334,10 +3383,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3437083215c505e867eea5478371feba43d7689d6d15ec0a209eb46fb0d4cda6"
 dependencies = [
  "blake2b_simd",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "lazy_static",
  "rand 0.8.7",
+ "static_assertions",
+ "subtle",
+]
+
+[[package]]
+name = "pasta_curves"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c6ffcfacaf7dc81ca2e318f019b6e09f84327ecfbddb4e58574bcebdd123975"
+dependencies = [
+ "blake2b_simd",
+ "ff 0.14.0",
+ "group 0.14.0",
+ "lazy_static",
+ "rand 0.10.4",
  "static_assertions",
  "subtle",
 ]
@@ -3362,12 +3426,12 @@ dependencies = [
  "blake2b_simd",
  "bls12_381",
  "document-features",
- "ff",
+ "ff 0.13.1",
  "getset",
  "jubjub",
  "nonempty",
  "orchard",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "postcard",
  "rand_core 0.6.4",
  "redjubjub",
@@ -3546,12 +3610,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "350efadb12ec2d11c8966cd376d9677c9e0038e3bb4aa2acfc69a8edc25700c9"
 dependencies = [
  "anyhow",
- "ff",
+ "ff 0.13.1",
  "futures",
  "hex",
  "imt-tree",
  "log",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "pir-types",
  "serde_json",
  "tokio",
@@ -3565,9 +3629,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "635f27cfabeca929f821a0f1c934a15f27fd2922a61c487ecf1daa43b20dfd3e"
 dependencies = [
  "anyhow",
- "ff",
+ "ff 0.13.1",
  "imt-tree",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "serde",
 ]
 
@@ -3914,6 +3978,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f6fa277c67e6ea590466f04c3fe82cb509f0864fe470643e5570de9514a9b11"
+dependencies = [
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "rand_chacha"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3950,6 +4023,12 @@ checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
  "getrandom 0.3.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rand_distr"
@@ -4019,10 +4098,10 @@ dependencies = [
  "blake2b_simd",
  "byteorder",
  "frost-rerandomized",
- "group",
+ "group 0.13.0",
  "hex",
  "jubjub",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rand_core 0.6.4",
  "serde",
  "thiserror 2.0.19",
@@ -4349,10 +4428,10 @@ dependencies = [
  "bls12_381",
  "corez",
  "document-features",
- "ff",
+ "ff 0.13.1",
  "fpe",
  "getset",
- "group",
+ "group 0.13.0",
  "hex",
  "incrementalmerkletree",
  "jubjub",
@@ -4732,8 +4811,8 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d268ae0ea06faafe1662e9967cd4f9022014f5eeb798e0c302c876df8b7af9c"
 dependencies = [
- "group",
- "pasta_curves",
+ "group 0.13.0",
+ "pasta_curves 0.5.2",
  "subtle",
 ]
 
@@ -6679,13 +6758,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22d1048977b2b16cd9ec141fd4521266565a970d41df67d446a6d2dbefe329bd"
 dependencies = [
  "anyhow",
- "ff",
+ "ff 0.13.1",
  "halo2_gadgets",
  "imt-tree",
  "incrementalmerkletree",
  "lazy_static",
  "libc",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "shardtree",
 ]
 
@@ -6696,9 +6775,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e818193fc3f7755ccd8d4ea713804a12f9743804737a4ef50a69dc26150b49e8"
 dependencies = [
  "base64",
- "ff",
+ "ff 0.13.1",
  "hex",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
@@ -6712,8 +6791,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "014def2d1738ecc42253d0cd0f6e74847bc51ccde55ad992abadede7fade76d5"
 dependencies = [
  "blake2b_simd",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "halo2_gadgets",
  "halo2_poseidon",
  "halo2_proofs",
@@ -6721,7 +6800,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "orchard",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "rand 0.8.7",
  "sinsemilla",
 ]
@@ -7287,7 +7366,7 @@ dependencies = [
  "fs-mistrust",
  "futures-util",
  "getset",
- "group",
+ "group 0.13.0",
  "hex",
  "http-body-util",
  "hyper",
@@ -7296,7 +7375,7 @@ dependencies = [
  "memuse",
  "nonempty",
  "orchard",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "pczt",
  "percent-encoding",
  "postcard",
@@ -7346,7 +7425,7 @@ dependencies = [
  "bs58",
  "byteorder",
  "document-features",
- "group",
+ "group 0.13.0",
  "hex",
  "incrementalmerkletree",
  "jubjub",
@@ -7409,7 +7488,7 @@ dependencies = [
  "byteorder",
  "corez",
  "document-features",
- "group",
+ "group 0.13.0",
  "memuse",
  "nonempty",
  "orchard",
@@ -7470,7 +7549,7 @@ dependencies = [
  "crypto-common 0.2.0-rc.1",
  "document-features",
  "equihash",
- "ff",
+ "ff 0.13.1",
  "hex",
  "incrementalmerkletree",
  "jubjub",
@@ -7498,7 +7577,7 @@ dependencies = [
  "blake2b_simd",
  "bls12_381",
  "document-features",
- "group",
+ "group 0.13.0",
  "home",
  "jubjub",
  "known-folders",
@@ -7583,8 +7662,8 @@ dependencies = [
  "blake2b_simd",
  "bytes",
  "ed25519-dalek",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "halo2_gadgets",
  "halo2_proofs",
  "hex",
@@ -7597,7 +7676,7 @@ dependencies = [
  "incrementalmerkletree",
  "nonempty",
  "orchard",
- "pasta_curves",
+ "pasta_curves 0.5.2",
  "pczt",
  "pir-client",
  "pir-types",
