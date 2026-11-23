@@ -112,6 +112,10 @@ incrementalmerkletree = { version = "0.8", default-features = false }
 [dev-dependencies]
 hex = "0.4"
 tempfile = "3"
+# Test-only (as in the Android NU7 fork): BIP 39 seeds of the fixture wallets and SHA-256 digests
+# of the SDK 3.0.0 ground truth in `rust/src/test_vectors.rs`.
+bip0039 = "0.12"
+sha2 = "0.10"
 
 [build-dependencies]
 bindgen = "0.72"

@@ -106,6 +106,11 @@ mod migration_turnstile;
 mod tor;
 mod voting;
 
+#[cfg(test)]
+mod nu7_tests;
+#[cfg(test)]
+mod test_vectors;
+
 #[cfg(target_vendor = "apple")]
 mod os_log;
 
