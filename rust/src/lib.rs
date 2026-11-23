@@ -23,7 +23,6 @@ use pczt::{
     roles::{combiner::Combiner, prover::Prover},
 };
 use prost::Message;
-use rand::rngs::OsRng;
 use secrecy::Secret;
 use tor_rtcompat::ToplevelBlockOn as _;
 use tracing::{debug, metadata::LevelFilter};
@@ -103,7 +102,13 @@ mod migration_finalize;
 mod migration_keystone;
 mod migration_plan_cache;
 mod migration_turnstile;
+mod r0;
+mod rng;
 mod tor;
+// Voting is disabled in the NU7 fork: `zcash_voting` has no release for the NU7 crate set, so its
+// dependency is commented out in Cargo.toml and these sources are not built (as in the Android
+// NU7 fork). The `zcashlc_voting_*` C symbols are absent from this library.
+#[cfg(zcash_voting)]
 mod voting;
 
 #[cfg(test)]
@@ -115,6 +120,7 @@ mod test_vectors;
 mod os_log;
 
 use crate::error_report::{ClassifiedError, ErrorKind};
+use crate::rng::OsRng;
 use crate::tor::TorRuntime;
 
 fn unwrap_exc_or<T>(exc: Result<T, ()>, def: T) -> T {
@@ -598,10 +604,11 @@ pub unsafe extern "C" fn zcashlc_create_account(
             .create_account(account_name, &seed, &birthday, key_source)
             .map_err(|e| anyhow!("Error while initializing accounts: {}", e))?;
 
+        // zcash_keys 0.17 returns the encoding as a `SecretVec`; the bytes are unchanged.
         let encoded = usk.to_bytes(Era::Orchard);
         Ok(Box::into_raw(Box::new(ffi::BinaryKey::new(
             account_uuid,
-            encoded,
+            secrecy::ExposeSecret::expose_secret(&encoded).clone(),
         ))))
     });
     unwrap_exc_or_null(res)
@@ -888,7 +895,7 @@ pub unsafe extern "C" fn zcashlc_get_current_address(
             UnifiedAddressRequest::AllAvailableKeys,
         ) {
             Ok(Some(ua)) => {
-                let address_str = ua.encode(&network);
+                let address_str = r0::encode_ua(&ua, &network);
                 Ok(CString::new(address_str).unwrap().into_raw())
             }
             Ok(None) => Err(anyhow!(
@@ -1053,7 +1060,7 @@ pub unsafe extern "C" fn zcashlc_get_next_available_address(
 
         match db_data.get_next_available_address(account_uuid, address_request) {
             Ok(Some((ua, _))) => {
-                let address_str = ua.encode(&network);
+                let address_str = r0::encode_ua(&ua, &network);
                 Ok(CString::new(address_str).unwrap().into_raw())
             }
             Ok(None) => Err(anyhow!(
@@ -2959,6 +2966,8 @@ pub unsafe extern "C" fn zcashlc_create_proposed_transactions(
         let txids = create_proposed_transactions::<_, _, Infallible, _, Infallible, _>(
             &mut db_data,
             &network,
+            &SystemClock,
+            &mut OsRng,
             &prover,
             &prover,
             &SpendingKeys::from_unified_spending_key(usk),
@@ -3091,6 +3100,8 @@ pub unsafe extern "C" fn zcashlc_create_pczt_from_proposal(
             let pczt = create_pczt_from_proposal::<_, _, Infallible, _, Infallible, _>(
                 &mut db_data,
                 &network,
+                &SystemClock,
+                &mut OsRng,
                 account_uuid,
                 OvkPolicy::Sender,
                 &proposal,
@@ -3270,6 +3281,7 @@ pub unsafe extern "C" fn zcashlc_add_proofs_to_pczt(
                 })?;
             prover = prover
                 .create_orchard_proof(
+                    OsRng,
                     zcash_primitives::transaction::builder::cached_orchard_proving_key(
                         circuit_version,
                     ),
@@ -3293,6 +3305,7 @@ pub unsafe extern "C" fn zcashlc_add_proofs_to_pczt(
                 })?;
             prover = prover
                 .create_ironwood_proof(
+                    OsRng,
                     zcash_primitives::transaction::builder::cached_orchard_proving_key(
                         circuit_version,
                     ),
@@ -3318,7 +3331,7 @@ pub unsafe extern "C" fn zcashlc_add_proofs_to_pczt(
             let local_prover = LocalTxProver::new(spend_params, output_params);
 
             prover = prover
-                .create_sapling_proofs(&local_prover, &local_prover)
+                .create_sapling_proofs(OsRng, &local_prover, &local_prover)
                 .map_err(|e| anyhow!("Failed to create Sapling proofs for PCZT: {:?}", e))?;
         }
         assert!(!prover.requires_sapling_proofs());
@@ -3435,6 +3448,8 @@ pub unsafe extern "C" fn zcashlc_extract_and_store_from_pczt(
 
         let txid = extract_and_store_transaction_from_pczt::<_, ()>(
             &mut db_data,
+            &SystemClock,
+            &mut OsRng,
             pczt,
             sapling_vk.as_ref().map(|(s, o)| (s, o)),
             None,
@@ -3937,7 +3952,7 @@ pub unsafe extern "C" fn zcashlc_get_exchange_rate_usd(
         let rate = tor_runtime.runtime().block_on(async {
             tor_runtime
                 .client()
-                .get_latest_zec_to_usd_rate(&exchanges)
+                .get_latest_zec_to_usd_rate(&mut OsRng, &exchanges)
                 .await
         })?;
 
@@ -4069,7 +4084,7 @@ pub unsafe extern "C" fn zcashlc_get_exchange_rate_usd_from(
         let rate = tor_runtime.runtime().block_on(async {
             tor_runtime
                 .client()
-                .get_latest_zec_to_usd_rate(&exchanges)
+                .get_latest_zec_to_usd_rate(&mut OsRng, &exchanges)
                 .await
         })?;
 
@@ -4694,6 +4709,9 @@ pub extern "C" fn zcashlc_set_custom_network(
         nu6_1: height(nu6_1),
         nu6_2: height(nu6_2),
         nu6_3: height(nu6_3),
+        // The C signature has no NU7 height yet (unchanged from 4.0.0): a custom network never
+        // activates NU7. Adding the parameter changes the header and the Swift caller.
+        nu7: None,
     };
 
     match CUSTOM_PARAMS.write() {
@@ -4826,6 +4844,7 @@ mod tests {
                 nu6_1: height,
                 nu6_2: height,
                 nu6_3: height,
+                nu7: height,
             },
         };
         assert_eq!(

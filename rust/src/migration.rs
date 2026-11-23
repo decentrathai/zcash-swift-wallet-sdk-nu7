@@ -75,7 +75,6 @@ use std::slice;
 use anyhow::anyhow;
 use ffi_helpers::panic::catch_panic;
 use orchard::keys::SpendingKey;
-use rand::rngs::OsRng;
 use rusqlite::{Connection, OptionalExtension};
 use zcash_client_backend::data_api::wallet::{
     TargetHeight,
@@ -92,6 +91,7 @@ use zcash_protocol::consensus::{
     BLOCKS_PER_HOUR, BlockHeight, Network, NetworkUpgrade, Parameters,
 };
 use zcash_protocol::value::Zatoshis;
+use zcash_protocol::zip318::BlockSpacing;
 use zcash_protocol::{PoolType, ShieldedPool, TxId};
 
 use zcash_pool_migration::engine::{
@@ -111,6 +111,8 @@ use zcash_pool_migration::state::{
     AdvanceStep, Blocker, NextAction, ProveTarget, StepKind, TransactionStatus,
 };
 use zcash_pool_migration::wallet::WalletMigrationProver;
+
+use crate::rng::OsRng;
 
 use crate::migration_engine::{
     AdapterError, MigrationWallet, account_migration, account_store, stored_orchard_fvk,
@@ -1184,7 +1186,7 @@ fn serve_for_broadcast(
         .ok_or_else(|| anyhow!("no migration transaction with id {}", u32::from(id)))?;
     let mut store = account_store(&ctx.wallet, ctx.account, &mut ctx.store_conn)?;
     let tx = store
-        .take_transaction_for_broadcast(state, id)
+        .take_transaction_for_broadcast(OsRng, state, id)
         .map_err(|e| broadcast_seam_error(id, e))?;
     let mut raw = Vec::new();
     tx.write(&mut raw)
@@ -1241,7 +1243,7 @@ fn prove_one(
                 .map_or_else(|| ctx.tip(), Ok)?;
             let network = ctx.network;
             let fvk = stored_orchard_fvk(&ctx.wallet, ctx.account)?;
-            let mut prover = WalletMigrationProver::new(&mut ctx.wallet, ctx.account, fvk);
+            let mut prover = WalletMigrationProver::new(&mut ctx.wallet, OsRng, ctx.account, fvk);
             let Some(proved) = migration_finalize::prove_due_transaction(
                 &network,
                 &mut prover,
@@ -2595,14 +2597,18 @@ fn drive_advance(
     estimated_tip: i64,
 ) -> anyhow::Result<Advance> {
     let targets = dueness_targets(ctx.tip()?, estimated_tip);
+    // NU7 (zcash_pool_migration 0.2.0): durations are counted in 75-second reference blocks and
+    // stretched by the chain's spacing from NU7 activation on (25-second blocks), as Android.
+    let spacing = BlockSpacing::for_network(&ctx.network);
     let mut store = account_store(&ctx.wallet, ctx.account, &mut ctx.store_conn)?;
     advance_migration(
         &mut store,
         state,
         targets,
-        &AdvanceConfig::new(ReorgSettleDepth::new(
-            zcash_pool_migration::scheduling::PROVABLE_ANCHOR_DEPTH,
-        )),
+        &AdvanceConfig::new(
+            ReorgSettleDepth::new(zcash_pool_migration::scheduling::PROVABLE_ANCHOR_DEPTH),
+            spacing,
+        ),
         // librustzcash #2910: re-spreading a missed broadcast schedule draws fresh
         // inter-broadcast gaps, so advancing needs entropy.
         &mut OsRng,
@@ -4802,7 +4808,7 @@ mod tests {
             .expect("account creation must succeed");
         (
             account.expose_uuid().into_bytes(),
-            usk.to_bytes(Era::Orchard),
+            secrecy::ExposeSecret::expose_secret(&usk.to_bytes(Era::Orchard)).clone(),
         )
     }
 
@@ -5178,7 +5184,13 @@ mod tests {
     #[test]
     fn schedule_rows_sort_chronologically_with_prep_offset() {
         let mut rng = StdRng::seed_from_u64(7);
-        let schedule = scheduling::schedule(&SchedulingParams::ZIP_318, h(1_000), 5, &mut rng);
+        let schedule = scheduling::schedule(
+            &SchedulingParams::ZIP_318,
+            &BlockSpacing::UNIFORM,
+            h(1_000),
+            5,
+            &mut rng,
+        );
         // The engine hands the crossing values straight over; they are already net of the fee
         // buffer that pays each transfer's own fee.
         let crossing_values: Vec<Zatoshis> = (1..=5).map(|i| zat(i * 100_000_000)).collect();
@@ -5214,7 +5226,13 @@ mod tests {
         let expected_total: u64 = crossing_values.iter().map(|z| u64::from(*z)).sum();
 
         let mut rng_a = StdRng::seed_from_u64(1);
-        let schedule_a = scheduling::schedule(&SchedulingParams::ZIP_318, h(1_000), 5, &mut rng_a);
+        let schedule_a = scheduling::schedule(
+            &SchedulingParams::ZIP_318,
+            &BlockSpacing::UNIFORM,
+            h(1_000),
+            5,
+            &mut rng_a,
+        );
         let rows_a = schedule_rows(
             &planned_transfers(0, &schedule_a),
             &crossing_values,
@@ -5223,7 +5241,13 @@ mod tests {
         .unwrap();
 
         let mut rng_b = StdRng::seed_from_u64(99);
-        let schedule_b = scheduling::schedule(&SchedulingParams::ZIP_318, h(1_000), 5, &mut rng_b);
+        let schedule_b = scheduling::schedule(
+            &SchedulingParams::ZIP_318,
+            &BlockSpacing::UNIFORM,
+            h(1_000),
+            5,
+            &mut rng_b,
+        );
         let rows_b = schedule_rows(
             &planned_transfers(0, &schedule_b),
             &crossing_values,
@@ -5258,7 +5282,13 @@ mod tests {
     #[test]
     fn schedule_rows_reject_length_mismatch() {
         let mut rng = StdRng::seed_from_u64(7);
-        let schedule = scheduling::schedule(&SchedulingParams::ZIP_318, h(1_000), 3, &mut rng);
+        let schedule = scheduling::schedule(
+            &SchedulingParams::ZIP_318,
+            &BlockSpacing::UNIFORM,
+            h(1_000),
+            3,
+            &mut rng,
+        );
         let crossing_values = vec![zat(100)];
         assert!(
             schedule_rows(
@@ -5290,6 +5320,7 @@ mod tests {
         .unwrap();
         let schedule = scheduling::schedule(
             &SchedulingParams::ZIP_318,
+            &BlockSpacing::UNIFORM,
             h(1_000),
             crossing_values.len(),
             &mut rng,
@@ -5787,7 +5818,7 @@ mod tests {
         use orchard::note::{ExtractedNoteCommitment, Note, NoteVersion, RandomSeed, Rho};
         use orchard::note_encryption::{OrchardDomain, OrchardNoteEncryption};
         use orchard::value::NoteValue;
-        use rand::RngCore;
+        use rand::Rng;
         use zcash_client_backend::proto::compact_formats::CompactOrchardAction;
         use zcash_note_encryption::Domain;
 
@@ -5838,7 +5869,7 @@ mod tests {
             nullifier: nf_old.to_vec(),
             cmx: cmx.to_bytes().to_vec(),
             ephemeral_key: ephemeral_key.0.to_vec(),
-            ciphertext: enc_ciphertext[..52].to_vec(),
+            ciphertext: enc_ciphertext.as_ref()[..52].to_vec(),
         }
     }
 
@@ -7312,7 +7343,7 @@ mod tests {
         use orchard::keys::{FullViewingKey, Scope, SpendingKey};
         use orchard::note::{Note, NoteVersion, RandomSeed, Rho};
         use orchard::value::NoteValue;
-        use rand::RngCore;
+        use rand::Rng;
         use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
         use zcash_protocol::consensus::MAIN_NETWORK;
 
@@ -10900,7 +10931,7 @@ mod tests {
         let mut store = account_store(&ctx.wallet, ctx.account, &mut ctx.store_conn)
             .expect("the fixture store opens");
         store
-            .take_transaction_for_broadcast(state, MigrationTransferId::new(id))
+            .take_transaction_for_broadcast(OsRng, state, MigrationTransferId::new(id))
             .map(|_| ())
     }
 

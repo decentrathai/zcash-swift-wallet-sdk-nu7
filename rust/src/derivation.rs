@@ -192,18 +192,22 @@ pub unsafe extern "C" fn zcashlc_get_typecodes_for_unified_address_receivers(
     let res = catch_panic(|| {
         let ua_str = unsafe { CStr::from_ptr(ua).to_str()? };
 
-        let (_, ua) = unified::Address::decode(ua_str)
+        // zcash_address 0.14: decode also returns the ZIP 316 revision; `items()` returns the
+        // data items (receivers) only, as before, and `DataTypecode` maps to the same u32 values.
+        let (_, _revision, ua) = unified::Address::decode(ua_str)
             .map_err(|e| anyhow!("Invalid Unified Address: {}", e))?;
 
         let typecodes = ua
             .items()
             .into_iter()
             .map(|receiver| match receiver {
-                unified::Receiver::P2pkh(_) => unified::Typecode::P2pkh,
-                unified::Receiver::P2sh(_) => unified::Typecode::P2sh,
-                unified::Receiver::Sapling(_) => unified::Typecode::Sapling,
-                unified::Receiver::Orchard(_) => unified::Typecode::Orchard,
-                unified::Receiver::Unknown { typecode, .. } => unified::Typecode::Unknown(typecode),
+                unified::Receiver::P2pkh(_) => unified::DataTypecode::P2pkh,
+                unified::Receiver::P2sh(_) => unified::DataTypecode::P2sh,
+                unified::Receiver::Sapling(_) => unified::DataTypecode::Sapling,
+                unified::Receiver::Orchard(_) => unified::DataTypecode::Orchard,
+                unified::Receiver::Unknown { typecode, .. } => {
+                    unified::DataTypecode::Unknown(typecode)
+                }
             })
             .map(u32::from)
             .collect::<Vec<_>>();
@@ -347,8 +351,10 @@ pub unsafe extern "C" fn zcashlc_derive_spending_key(
         UnifiedSpendingKey::from_seed(&network, seed, account)
             .map_err(|e| anyhow!("error generating unified spending key from seed: {:?}", e))
             .map(move |usk| {
+                // zcash_keys 0.17 returns the encoding as a `SecretVec`; the bytes handed over
+                // the FFI are unchanged.
                 let encoded = usk.to_bytes(Era::Orchard);
-                ffi::BoxedSlice::some(encoded)
+                ffi::BoxedSlice::some(secrecy::ExposeSecret::expose_secret(&encoded).clone())
             })
     });
     unwrap_exc_or_null(res)
@@ -377,7 +383,9 @@ pub unsafe extern "C" fn zcashlc_spending_key_to_full_viewing_key(
         let network = parse_network(network_id)?;
         unsafe { decode_usk(usk_ptr, usk_len) }.map(|usk| {
             let ufvk = usk.to_unified_full_viewing_key();
-            CString::new(ufvk.encode(&network)).unwrap().into_raw()
+            CString::new(crate::r0::encode_ufvk(&ufvk, &network))
+                .unwrap()
+                .into_raw()
         })
     });
     unwrap_exc_or_null(res)
@@ -616,19 +624,79 @@ pub unsafe extern "C" fn zcashlc_derive_account_metadata_key(
         let seed = unsafe { slice::from_raw_parts(seed, seed_len) };
         let account = zip32_account_index(account)?;
 
-        let key = zip32::registered::SecretKey::from_subpath(
-            b"MetadataKeys",
-            seed,
-            325,
-            &[
-                PathElement::new(ChildIndex::hardened(network.coin_type()), &[]),
-                PathElement::new(ChildIndex::hardened(account.into()), &[]),
-            ],
-        )?;
+        let key = account_metadata_key(seed, network.coin_type(), account)?;
 
         Ok(ffi::AccountMetadataKey::new(key))
     });
     unwrap_exc_or_null(res)
+}
+
+/// The ZIP 325 account metadata key for `account` (the derivation behind
+/// [`zcashlc_derive_account_metadata_key`]), as in the Android NU7 fork.
+pub(crate) fn account_metadata_key(
+    seed: &[u8],
+    coin_type: u32,
+    account: zip32::AccountId,
+) -> anyhow::Result<zip32::registered::SecretKey> {
+    Ok(zip32::registered::SecretKey::from_subpath(
+        b"MetadataKeys",
+        seed,
+        325,
+        &[
+            PathElement::new(ChildIndex::hardened(coin_type), &[]),
+            PathElement::new(ChildIndex::hardened(account.into()), &[]),
+        ],
+    )?)
+}
+
+/// The private-use metadata keys under `account_metadata_key` (the derivation behind
+/// [`zcashlc_derive_private_use_metadata_key`]): the inherent subtree's single key when
+/// `ufvk_string` is `None`, otherwise one key per FVK item of the UFVK, in preference order.
+pub(crate) fn private_use_metadata_keys(
+    account_metadata_key: &zip32::registered::SecretKey,
+    ufvk_string: Option<&str>,
+    expected_net: NetworkType,
+    private_use_subject: &[u8],
+) -> anyhow::Result<Vec<zip32::registered::SecretKey>> {
+    let keys = match ufvk_string {
+        // For the inherent subtree, there is only ever one key.
+        None => vec![
+            account_metadata_key
+                .derive_child_with_tag(ChildIndex::hardened(0), &[])
+                .derive_child_with_tag(ChildIndex::PRIVATE_USE, private_use_subject),
+        ],
+        // For the external subtree, we derive keys from the UFVK's items.
+        Some(ufvk_string) => {
+            // The revision (R0 `uview` or R2 `uvf`) does not affect the derivation: `items()`
+            // returns the FVK data items only, in preference order, for either revision.
+            let (net, _revision, ufvk) =
+                unified::Ufvk::decode(ufvk_string).map_err(|e| anyhow!("{e}"))?;
+            if net != expected_net {
+                return Err(anyhow!(
+                    "UFVK is for network {:?} but we expected {:?}",
+                    net,
+                    expected_net,
+                ));
+            }
+
+            // Any metadata should always be associated with the key derived from the
+            // most preferred FVK item. However, we don't know which FVK items the
+            // UFVK contained the last time we were asked to derive keys. So we derive
+            // every key and return them to the caller in preference order. If the
+            // caller finds data associated with an older FVK item, they will migrate
+            // it to the first key we return.
+            ufvk.items()
+                .into_iter()
+                .map(|fvk_item| {
+                    account_metadata_key
+                        .derive_child_with_tag(ChildIndex::hardened(1), &[])
+                        .derive_child_with_tag(ChildIndex::hardened(0), &fvk_item.typed_encoding())
+                        .derive_child_with_tag(ChildIndex::PRIVATE_USE, private_use_subject)
+                })
+                .collect()
+        }
+    };
+    Ok(keys)
 }
 
 /// Derives a metadata key for private use from a ZIP 325 Account Metadata Key.
@@ -684,47 +752,12 @@ pub unsafe extern "C" fn zcashlc_derive_private_use_metadata_key(
         let private_use_subject =
             unsafe { slice::from_raw_parts(private_use_subject, private_use_subject_len) };
 
-        let private_use_keys = match ufvk_str {
-            // For the inherent subtree, there is only ever one key.
-            None => vec![
-                account_metadata_key
-                    .inner
-                    .derive_child_with_tag(ChildIndex::hardened(0), &[])
-                    .derive_child_with_tag(ChildIndex::PRIVATE_USE, private_use_subject),
-            ],
-            // For the external subtree, we derive keys from the UFVK's items.
-            Some(ufvk_string) => {
-                let (net, ufvk) = unified::Ufvk::decode(ufvk_string).map_err(|e| anyhow!("{e}"))?;
-                let expected_net = network.network_type();
-                if net != expected_net {
-                    return Err(anyhow!(
-                        "UFVK is for network {:?} but we expected {:?}",
-                        net,
-                        expected_net,
-                    ));
-                }
-
-                // Any metadata should always be associated with the key derived from the
-                // most preferred FVK item. However, we don't know which FVK items the
-                // UFVK contained the last time we were asked to derive keys. So we derive
-                // every key and return them to the caller in preference order. If the
-                // caller finds data associated with an older FVK item, they will migrate
-                // it to the first key we return.
-                ufvk.items()
-                    .into_iter()
-                    .map(|fvk_item| {
-                        account_metadata_key
-                            .inner
-                            .derive_child_with_tag(ChildIndex::hardened(1), &[])
-                            .derive_child_with_tag(
-                                ChildIndex::hardened(0),
-                                &fvk_item.typed_encoding(),
-                            )
-                            .derive_child_with_tag(ChildIndex::PRIVATE_USE, private_use_subject)
-                    })
-                    .collect()
-            }
-        };
+        let private_use_keys = private_use_metadata_keys(
+            &account_metadata_key.inner,
+            ufvk_str,
+            network.network_type(),
+            private_use_subject,
+        )?;
 
         Ok(ffi::SymmetricKeys::ptr_from_vec(
             private_use_keys

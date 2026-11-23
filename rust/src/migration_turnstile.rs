@@ -12,8 +12,6 @@
 //! exposes generally, with the pool set, recipient and spend mode fixed.
 
 use anyhow::anyhow;
-use rand::rngs::OsRng;
-use zcash_address::{ToAddress, ZcashAddress, unified, unified::Encoding as _};
 use zcash_client_backend::{
     data_api::{
         Account as _, InputSource, MaxSpendMode, WalletRead,
@@ -32,6 +30,7 @@ use zcash_protocol::{
 };
 
 use crate::NetworkParams;
+use crate::rng::OsRng;
 
 // This line carries custom (regtest-style) networks, so the wallet handle is parameterized by
 // `NetworkParams` rather than `zcash_protocol`'s fixed `Network`.
@@ -77,13 +76,7 @@ pub(crate) fn propose_orchard_to_ironwood(
 
     // Internal scope: funds return to the account as change, not an external payment.
     let receiver = orchard_fvk.address_at(0u32, orchard::keys::Scope::Internal);
-    let recipient = ZcashAddress::from_unified(
-        network.network_type(),
-        unified::Address::try_from_items(vec![unified::Receiver::Orchard(
-            receiver.to_raw_address_bytes(),
-        )])
-        .map_err(|e| anyhow!("Unable to construct the migration recipient: {}", e))?,
-    );
+    let recipient = crate::r0::orchard_only_address(network.network_type(), &receiver);
 
     let spend_pools = [ShieldedPool::Orchard];
     let fee_rule = StandardFeeRule::Zip317;
